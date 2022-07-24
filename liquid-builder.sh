@@ -23,3 +23,13 @@ else
 	echo -e "${red}[x]: Build Configurations not found!\n"
 	return 0
 fi
+
+if [ ${TARGET_USE_TELEGRAM} == 'true' ];then
+        if [ ${CHATID} == '' ]; then
+                echo -e "${red}[x]: Chat ID is not defined"
+                return 0
+        elif [ ${TOKEN} == '' ]; then
+                echo -e "${red}[x]: Bot Token is not defined"
+		return 0
+        fi
+fi
