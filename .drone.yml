@@ -1,0 +1,22 @@
+---
+clone:
+  depth: 1
+kind: pipeline
+name: liquid-Pipeline
+steps:
+  - name: Kernel Pipeline
+    image: panchajanya1999/archlinux:latest
+    commands:
+      - git config --global user.email "<>"
+      - git config --global user.name "liquid-CI"
+      - sh liquid-builder.sh
+    environment:
+      TOKEN:
+        from_secret: token
+      CHATID:
+        from_secret: chatid
+
+trigger:
+  event:
+  - custom
+
