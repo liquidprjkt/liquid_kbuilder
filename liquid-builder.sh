@@ -1,4 +1,4 @@
-#!/usr/bin/sh
+#!/usr/bin/sh
 #
 # The liquid Project
 # Copyright (c) 2022 UsiFX <xprjkts@gmail.com>
@@ -18,6 +18,9 @@ red='\e[1;31m'
 # first of all, include build configuration
 if [ $(pwd)/builder-arg.cfg ]; then
 	source $(pwd)/builder-arg.cfg
+  export KBUILD_BUILD_USER=$TARGET_BUILD_USER
+  export KBUILD_BUILD_HOST=$TARGET_BUILD_HOST
+  export KBUILD_BUILD_VERSION=$TARGET_PACKAGE_NAME+$TARGET_SPECIAL_BUILDID
 	echo -e "${blue}[i]: Configured\e[0m"
 else
 	echo -e "${red}[x]: Build Configurations not found!\n"
@@ -76,10 +79,22 @@ if [ $TARGET_CLONE_DEPENDENCIES == 'true' ]; then
 				echo -e "${blue}[i] Cloning ${TARGET_COMPILER_REPOSITORY}..."
 				git clone --depth=1 "${TARGET_COMPILER_REPOSITORY}" ${TARGET_WORKSPACE_DIRECTORY}/clang &>/dev/null
 				echo -e "${green}[*] Done."
-			else
 				KBUILD_COMPILER_STRING=$("${TARGET_COMPILER_REPOSITORY}"/clang/bin/clang -v 2>&1 | head -n 1 | sed 's/(https..*//' | sed 's/ version//')
 				export KBUILD_COMPILER_STRING
 				export PATH=$TARGET_COMPILER_REPOSITORY/clang/bin/:/usr/bin/:${PATH}
+        MAKE+=(
+          ARCH=arm64
+          O=out
+          CROSS_COMPILE=aarch64-linux-gnu-
+          CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          AR=llvm-ar
+          AS=llvm-as
+          NM=llvm-nm
+          OBJDUMP=llvm-objdump
+          STRIP=llvm-strip
+          CC=clang
+          V=0 2>&1 | tee ${TARGET_WORKSPACE_DIRECTORY}/builder.log
+        )
 				echo -e "${blue}[i] Compiler Strings have been set successfully."
 			fi
 		fi
@@ -97,12 +112,29 @@ if [ $TARGET_CLONE_DEPENDENCIES == 'true' ]; then
 				echo -e "${blue}[i] Cloning ${TARGET_GCC_COMPILER32_REPOSITORY}..."
 				git clone --depth=1 "${TARGET_GCC_COMPILER32_REPOSITORY}" ${TARGET_WORKSPACE_DIRECTORY}/gcc32 &>/dev/null
 				echo -e "${green}[*] Done."
-			else
 				KBUILD_COMPILER_STRING=$("${TARGET_WORKSPACE_DIRECTORY}"/gcc64/bin/aarch64-elf-gcc --version | head -n 1)
 				export KBUILD_COMPILER_STRING
 				export PATH="${TARGET_WORKSPACE_DIRECTORY}"/gcc32/bin:"${TARGET_WORKSPACE_DIRECTORY}"/gcc64/bin:/usr/bin/:${PATH}
+        MAKE+=(
+          ARCH=arm64
+          O=out
+          CROSS_COMPILE=aarch64-elf-
+          CROSS_COMPILE_ARM32=arm-eabi-
+          LD="${TARGET_WORKSPACE_DIRECTORYSPACE_DIRECTORY}"/gcc64/bin/aarch64-elf-"${TARGET_LINKER}"
+          AR=llvm-ar
+          NM=llvm-nm
+          OBJDUMP=llvm-objdump
+          OBJCOPY=llvm-objcopy
+          OBJSIZE=llvm-objsize
+          STRIP=llvm-strip
+          HOSTAR=llvm-ar
+          HOSTCC=gcc
+          HOSTCXX=aarch64-elf-g++
+          CC=aarch64-elf-gcc
+          V=0 2>&1 | tee ${TARGET_WORKSPACE_DIRECTORY}/builder.log
+        )
 				echo -e "${blue}[i] Compiler Strings have been set successfully."
-			fi
+      fi
 		fi
 	if [ $TARGET_PACKAGE_ANYKERNEL == 'true' ]; then
 		if [ ! -d $TARGET_WORKSPACE_DIRECTORY/anykernel ]; then
@@ -117,13 +149,13 @@ if [ $TARGET_CLONE_DEPENDENCIES == 'true' ]; then
 				tg_send_msg "*Building ZIP!*"
 			fi
 			cd $TARGET_WORKSPACE_DIRECTORY/anykernel
-			cp $TARGET_WORKSPACE_DIRECTORY/out/arch/arm64/boot/Image.gz-dtb $(pwd)
+			cp $TARGET_WORKSPACE_DIRECTORY/out/arch/arm64/boot/${TARGET_COMPRESSION_STYLE} $(pwd)
 			zip -r9 "$TARGET_PACKAGE_NAME".zip . -x ".git*" -x "README.md" -x "LICENSE" -x "*.zip" &>/dev/null
 			echo -e "${green}[*] ZIP Built!"
 			if [ $TARGET_USE_TELEGRAM == 'true' ]; then
 				tg_send_msg "*ZIP Built!*"
 				tg_send_file "$TARGET_PACKAGE_NAME.zip" "
-*#$TARGET_SPECIAL_BUILDID
+#$TARGET_SPECIAL_BUILDID
 *compiler:* \`$KBUILD_COMPILER_STRING\`
 *builder:* \`$TARGET_BUILD_USER\`
 *host:* \`$TARGET_BUILD_HOST\`
@@ -132,3 +164,20 @@ if [ $TARGET_CLONE_DEPENDENCIES == 'true' ]; then
 			fi
 		}
 fi
+
+kcompile()
+{
+  echo -e "${blue}[i] attempt to Build (${DEVICE})[${CODENAME}]"
+  make -j"$TARGET_CORES" "${TARGET_DEFCONFIG}" "${MAKE[@]}"
+  if [ -f ${TARGET_WORKSPACE_DIRECTORY}/out/arch/arm64/boot/${IMAGE_COMPRESSION_STYLE} ]; then
+    echo -e "${green}[*] successfully compiled target"
+    if [ $TARGET_PACKAGE_ANYKERNEL == "true" ]; then
+      package
+    fi
+  else
+    echo -e "${red}[!] something went wrong, check provided logs."
+  fi
+}
+
+kcompile
+
